@@ -1,0 +1,23 @@
+{
+  "name": "cryptax",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx tsc",
+    "go": "node dist/index.js",
+    "bg": "npm run build && npm run go"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "csv-parse": "^5.5.5",
+    "figlet": "^1.7.0"
+  },
+  "devDependencies": {
+    "@types/figlet": "^1.5.8",
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  }
+}
