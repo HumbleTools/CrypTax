@@ -17,9 +17,8 @@ export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
 
 const applyTransaction = (bigWallet: any, transaction: Transaction): any => {
     // TODO use push to put into queue array, shift to retrieve first in line, unshift to put back in front of queue
-    // gain = prix de cession - [prix total d'acquisition * (prix de cession / valeur globale du portefeuille)]
-    // gains/pertes à calculer sur les ventes = SELL puis appliquer la transaction sur le portefeuille
-    // pour les autres types, simplement appliquer la transaction sur le portefeuille
+    // TODO add tests 
+    // TODO calculate gains, investment and withdrawals for each year, and all-time.
 
     console.log(transaction);
     const fiatWallet = getFiatWallet(bigWallet);
@@ -27,6 +26,7 @@ const applyTransaction = (bigWallet: any, transaction: Transaction): any => {
 
     switch (transaction.type) {
         case "DEPOSIT":
+            // Adding fiat deposit to fiat wallet
             return {
                 ...bigWallet,
                 EUR: {
@@ -35,26 +35,44 @@ const applyTransaction = (bigWallet: any, transaction: Transaction): any => {
                 }
             };
         case "BUY":
-            // TODO apply transaction to assetWallet and fiatWallet
             return {
                 ...bigWallet,
                 [transaction.assetName]: {
-                    ...assetWallet
+                    ...assetWallet,
+                    stack: [
+                        ...assetWallet!.stack,
+                        { // Adding new asset stack with fiatValue to assetWallet
+                            quantity: transaction.amountAsset,
+                            assetFiatPrice: transaction.marketFiatPrice
+                        }
+                    ]
                 },
                 EUR: {
-                    ...fiatWallet
+                    ...fiatWallet, // Removing transaction.amountFiat from fiatWallet
+                    amount: sumCents(fiatWallet.amount, -1*transaction.amountFiat)
                 }
             };
         case "SELL":
+            // Calculating assetWallet value before transaction, at the time of transaction
             const assetWalletFiatValue = getWalletFiatValue(assetWallet!);
             console.log(`assetWalletFiatValue: ${assetWalletFiatValue}`);
+            // TODO adding transaction.amountFiat to fiatWallet
+            // TODO biting into assetWallet.stack to remove transaction.amountAsset & recovering acquisition price 
+            // TODO calculating gain with Article 150 VH bis § III from french tax code
+            // gain = prix de cession - [prix total d'acquisition * (prix de cession / valeur globale du portefeuille)]
             break;
         case "TRANSFER":
+            if('IN'===transaction.direction){
+                // TODO adding transaction.amountAsset to assetWallet.stack
+            } else if('OUT'===transaction.direction){
+                // TODO but not required yet
+            }
             break;
         case "WITHDRAWAL":
+            // TODO removing fiat amount to a withdrawal wallet
             break;
     }
-    throw Error("should not go there yet !");
+    throw Error(`The transaction ${transaction.type}/${transaction.direction} is not yet handled !`);
 };
 
 const getFiatWallet = (bigWallet: any): FiatWallet => {
