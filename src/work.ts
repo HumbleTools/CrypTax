@@ -1,6 +1,6 @@
 import { CsvError } from "csv-parse/.";
 import { AssetWallet, digestBitpandaCsvTransaction, FiatWallet, StackedAmount, Transaction } from "./model";
-import { prodCents, sumCents } from "./utils";
+import { prodCents, sumCents, sumOcts } from "./utils";
 
 export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
     if (err) {
@@ -16,9 +16,9 @@ export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
 };
 
 const applyTransaction = (bigWallet: any, transaction: Transaction): any => {
-    // TODO use push to put into queue array, shift to retrieve first in line, unshift to put back in front of queue
-    // TODO add tests 
-    // TODO calculate gains, investment and withdrawals for each year, and all-time.
+    // TODO add unit tests to secure the code
+    // TODO calculate gains, investment and withdrawals for each year, and all-time
+    // TODO output in the end an array to display results calculated for each year
 
     console.log(transaction);
     const fiatWallet = getFiatWallet(bigWallet);
@@ -49,18 +49,38 @@ const applyTransaction = (bigWallet: any, transaction: Transaction): any => {
                 },
                 EUR: {
                     ...fiatWallet, // Removing transaction.amountFiat from fiatWallet
-                    amount: sumCents(fiatWallet.amount, -1*transaction.amountFiat)
+                    amount: sumCents(fiatWallet.amount, -1 * transaction.amountFiat)
                 }
             };
         case "SELL":
-            // Calculating assetWallet value before transaction, at the time of transaction
-            const assetWalletFiatValue = getWalletFiatValue(assetWallet!);
+            // Recovering total wallet value at the time of transaction
+            const assetWalletFiatValue = getWalletFiatValue(assetWallet!, transaction.marketFiatPrice!);
             console.log(`assetWalletFiatValue: ${assetWalletFiatValue}`);
-            // TODO adding transaction.amountFiat to fiatWallet
-            // TODO biting into assetWallet.stack to remove transaction.amountAsset & recovering acquisition price 
-            // TODO calculating gain with Article 150 VH bis § III from french tax code
-            // gain = prix de cession - [prix total d'acquisition * (prix de cession / valeur globale du portefeuille)]
-            break;
+            // Recovering selling price
+            const sellingPrice = transaction.amountFiat;
+            console.log(`sellingPrice: ${sellingPrice}`);
+            // Recovering total acquisition price
+            const totalAcquisitionPrice = getTotalAcquisitionPrice(assetWallet!);
+            console.log(`totalAcquisitionPrice: ${totalAcquisitionPrice}`);
+            // Calculating gain with Article 150 VH bis § III from french tax code
+            const gain = calculateGain(sellingPrice, assetWalletFiatValue, totalAcquisitionPrice);
+            console.log(`gain: ${gain}`);
+            return {
+                ...bigWallet,
+                [transaction.assetName]: {
+                    assetName: assetWallet!.assetName,
+                    fiatGains: [
+                        ...assetWallet!.fiatGains,
+                        gain
+                    ],
+                    // Biting into assetWallet.stack to remove transaction.amountAsset
+                    stack: calculateRemainingStack(assetWallet!.stack, transaction.amountAsset!)
+                },
+                EUR: {
+                    ...fiatWallet, // Adding selling price to fiatWallet
+                    amount: sumCents(fiatWallet.amount, transaction.amountFiat)
+                }
+            };
         case "TRANSFER":
             if('IN'===transaction.direction){
                 // TODO adding transaction.amountAsset to assetWallet.stack
@@ -84,8 +104,44 @@ const getAssetWallet = (bigWallet: any, assetName: string): AssetWallet | undefi
     return assetName==='EUR' ? undefined : assetWallet ?? { assetName, stack: [], fiatGains: [] };
 };
 
-const getWalletFiatValue = (assetWallet: AssetWallet): number => assetWallet.stack
+const getWalletFiatValue = (assetWallet: AssetWallet, currentFiatPrice: number): number => assetWallet.stack
     .reduce((previousTotal: number, currentStackedAmount: StackedAmount) => {
-        const currentValue = prodCents(currentStackedAmount.quantity, currentStackedAmount.assetFiatPrice);
+        const currentValue = prodCents(currentStackedAmount.quantity, currentFiatPrice);
         return sumCents(previousTotal, currentValue);
     }, 0);
+
+const getTotalAcquisitionPrice = (assetWallet: AssetWallet): number => assetWallet.stack
+.reduce((previousTotal: number, currentStackedAmount: StackedAmount) => {
+    const currentValue = prodCents(currentStackedAmount.quantity, currentStackedAmount.assetFiatPrice);
+    return sumCents(previousTotal, currentValue);
+}, 0);
+
+const calculateGain = (sellingPrice: number, assetWalletFiatValue: number, totalAcquisitionPrice: number) => {
+    // FORMULE : gain = prix de cession - [prix total d'acquisition * (prix de cession / valeur globale du portefeuille)]
+    return sumCents(sellingPrice, -1 * totalAcquisitionPrice * sellingPrice / assetWalletFiatValue);
+}
+
+const calculateRemainingStack = (stack: StackedAmount[], amountAsset: number) => {
+    // Use Shift to retrieve first in line, because assets are added at the end of the stack and oldest assets are sold first (PEPS/FIFO)
+    let newStack = [...stack];
+    let amountToRemove = amountAsset;
+    let infiniteLoopGuardian = 0;
+    do {
+        infiniteLoopGuardian++;
+        if(infiniteLoopGuardian > 999){
+            throw new Error("Huh-oh... been there too many times ! Incorrect computing...");
+        }
+        const popped = newStack.shift();
+        if(!popped){
+            throw new Error("Not enough funds !? Incorrect computing...");
+        }
+        amountToRemove = sumOcts(amountToRemove, -1 * popped.quantity);
+        if(amountToRemove < 0){
+            newStack.unshift({
+                assetFiatPrice: popped.assetFiatPrice,
+                quantity: -1 * amountToRemove
+            });
+        }
+    } while(amountToRemove <= 0);
+    return newStack;
+};
