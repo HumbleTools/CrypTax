@@ -83,14 +83,33 @@ const applyTransaction = (bigWallet: any, transaction: Transaction): any => {
             };
         case "TRANSFER":
             if('IN'===transaction.direction){
-                // TODO adding transaction.amountAsset to assetWallet.stack
+                return {
+                    ...bigWallet,
+                    [transaction.assetName]: {
+                        ...assetWallet,
+                        stack: [
+                            ...assetWallet!.stack,
+                            { // Adding transaction.amountAsset to assetWallet.stack without removing fiat
+                                quantity: transaction.amountAsset,
+                                assetFiatPrice: transaction.marketFiatPrice
+                            }
+                        ]
+                    },
+                };
             } else if('OUT'===transaction.direction){
                 // TODO but not required yet
             }
             break;
         case "WITHDRAWAL":
-            // TODO removing fiat amount to a withdrawal wallet
-            break;
+            // Removing fiat amount to a withdrawal wallet
+            const withdrawalWallet = getWithdrawalWallet(bigWallet)
+            return {
+                ...bigWallet,
+                "WEURO": {
+                    ...withdrawalWallet,
+                    amount: sumCents(withdrawalWallet.amount, transaction.amountFiat)
+                }
+            };
     }
     throw Error(`The transaction ${transaction.type}/${transaction.direction} is not yet handled !`);
 };
@@ -102,6 +121,10 @@ const getFiatWallet = (bigWallet: any): FiatWallet => {
 const getAssetWallet = (bigWallet: any, assetName: string): AssetWallet | undefined => {
     const assetWallet = bigWallet[assetName] as AssetWallet;
     return assetName==='EUR' ? undefined : assetWallet ?? { assetName, stack: [], fiatGains: [] };
+};
+const getWithdrawalWallet = (bigWallet: any) => {
+    const withdrawalWallet = bigWallet['WEUR'] as FiatWallet;
+    return withdrawalWallet ?? { fiatName: 'EUR', amount: 0 };
 };
 
 const getWalletFiatValue = (assetWallet: AssetWallet, currentFiatPrice: number): number => assetWallet.stack
