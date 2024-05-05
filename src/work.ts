@@ -102,10 +102,14 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
             }
             break;
         case "WITHDRAWAL":
-            // Removing fiat amount to a withdrawal wallet
+            // Removing fiat amount from fiatWallet to withdrawal wallet
             const withdrawalWallet = bigWallet.withdrawalWallet;
             return {
                 ...bigWallet,
+                fiatWallet: {
+                    ...fiatWallet,
+                    amount: sumCents(fiatWallet.amount, -1 * transaction.amountFiat)
+                },
                 withdrawalWallet: {
                     ...withdrawalWallet,
                     amount: sumCents(withdrawalWallet.amount, transaction.amountFiat)

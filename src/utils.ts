@@ -9,7 +9,7 @@ export const readLinesFromFile: (filePath: string) => string = (filePath) =>
 export const getNumberOrZero = (value: string): number => getNumberOrDefault(value, 0) as number;
 export const getNumberOrNull = (value: string): number | null => getNumberOrDefault(value, null);
 const getNumberOrDefault = (value: string, defaultValue: number | null) =>
-    '-'===value || !value ? defaultValue : parseFloat(value);
+    '-' === value || !value ? defaultValue : parseFloat(value);
 
 // https://medium.com/@tbreijm/exact-calculations-in-typescript-node-js-b7333803609e
 const round = (n: number, k: number, resolution: number): number => {
