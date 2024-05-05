@@ -1,6 +1,7 @@
 import { CsvError } from "csv-parse/.";
 import { AssetWallet, BigWallet, digestBitpandaCsvTransaction, FiatWallet, initBigWallet, StackedAmount, Transaction } from "./model";
 import { prodCents, sumCents, sumOcts } from "./utils";
+import { inspect } from "node:util";
 
 export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
     if (err) {
@@ -13,6 +14,7 @@ export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
         .reduce(applyTransaction, initBigWallet('EUR'));
 
     console.log(finalBigWallet);
+    console.log(inspect(finalBigWallet, { showHidden: false, depth: null, colors: true }))
 };
 
 const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWallet => {
