@@ -1,11 +1,5 @@
 import { getNumberOrNull, getNumberOrZero } from "./utils";
 
-export const DATA_SAMPLE = "\"Transaction ID\",Timestamp,\"Transaction Type\",In/Out,\"Amount Fiat\",Fiat,\"Amount Asset\",Asset,\"Asset market price\",\"Asset market price currency\",\"Asset class\",\"Product ID\",Fee,\"Fee asset\",Spread,\"Spread Currency\",\"Tax Fiat\"\n" +
-    "eeaf0A64,2022-02-07T12:30:52+01:00,deposit,incoming,25.00,EUR,-,EUR,-,-,Fiat,-,0.00000000,EUR,-,-,0.00\n" +
-    "5eff0Ae2,2022-02-09T06:45:33+01:00,deposit,incoming,50.00,EUR,-,EUR,-,-,Fiat,-,0.00000000,EUR,-,-,0.00\n" +
-    "9e5e0A21,2022-02-09T08:18:31+01:00,buy,outgoing,1.39,EUR,48969.76994983,SHIB,0.00,EUR,Fiat,193,-,-,-,-,0.00\n" +
-    "7e2d0Ab4,2022-02-09T08:18:31+01:00,buy,outgoing,1.78,EUR,0.03570817,LUNC,49.85,EUR,Fiat,133,-,-,-,-,0.00";
-
 export interface Transaction {
     date: Date;
     type: 'DEPOSIT' | 'BUY' | 'SELL' | 'TRANSFER' | 'WITHDRAWAL';
@@ -31,6 +25,24 @@ export interface FiatWallet {
     fiatName: string;
     amount: number;
 }
+
+export interface BigWallet {
+    fiatWallet: FiatWallet;
+    withdrawalWallet: FiatWallet;
+    assetWallets: Map<string, AssetWallet>;
+}
+
+export const initBigWallet = (fiatName: string): BigWallet => ({
+    fiatWallet: {
+        fiatName,
+        amount: 0
+    },
+    withdrawalWallet: {
+        fiatName,
+        amount: 0
+    },
+    assetWallets: new Map<string, AssetWallet>()
+});
 
 export const digestBitpandaCsvTransaction = (obj: any): Transaction => ({
     date: new Date(obj['Timestamp']),
