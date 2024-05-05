@@ -3,7 +3,7 @@ import * as fs from 'fs';
 export const readLinesFromFile: (filePath: string) => string = (filePath) =>
     fs.readFileSync(filePath, 'utf8')
         .split('\n')
-        .slice(5, 11)
+        .slice(5)
         .join('\n');
 
 export const getNumberOrZero = (value: string): number => getNumberOrDefault(value, 0) as number;

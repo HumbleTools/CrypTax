@@ -151,13 +151,13 @@ const calculateRemainingStack = (stack: StackedAmount[], amountAsset: number) =>
         if (!popped) {
             throw new Error("Not enough funds !? Incorrect computing...");
         }
-        amountToRemove = sumOcts(amountToRemove, -1 * popped.quantity);
-        if (amountToRemove < 0) {
+        amountToRemove = sumOcts(popped.quantity, -1 * Math.abs(amountToRemove));
+        if (amountToRemove > 0) {
             newStack.unshift({
                 assetFiatPrice: popped.assetFiatPrice,
-                quantity: -1 * amountToRemove
+                quantity: amountToRemove
             });
         }
-    } while (amountToRemove <= 0);
+    } while (amountToRemove < 0);
     return newStack;
 };
