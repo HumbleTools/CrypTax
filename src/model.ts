@@ -28,7 +28,8 @@ export interface FiatWallet {
 
 export interface BigWallet {
     fiatWallet: FiatWallet;
-    withdrawalWallet: FiatWallet;
+    totalDeposited: number;
+    totalWithdrawn: number;
     assetWallets: Map<string, AssetWallet>;
 }
 
@@ -37,10 +38,8 @@ export const initBigWallet = (fiatName: string): BigWallet => ({
         fiatName,
         amount: 0
     },
-    withdrawalWallet: {
-        fiatName,
-        amount: 0
-    },
+    totalDeposited: 0,
+    totalWithdrawn: 0,
     assetWallets: new Map<string, AssetWallet>()
 });
 
