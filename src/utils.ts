@@ -33,3 +33,8 @@ export const prodOcts = (...values: number[]): number => octs(prod(...values));
 export const div = (a: number, b: number): number => a / b;
 export const divCents = (a: number, b: number): number => cents(div(a, b));
 export const divOcts = (a: number, b: number): number => octs(div(a, b));
+
+export const Testing = {
+    cents,
+    octs
+}
