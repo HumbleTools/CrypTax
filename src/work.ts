@@ -1,6 +1,6 @@
 import { CsvError } from "csv-parse/.";
 import { AssetWallet, BigWallet, digestBitpandaCsvTransaction, FiatWallet, initBigWallet, StackedAmount, Transaction } from "./model";
-import { cents, octs } from "./utils";
+import { cents, getNumberOrZero, octs } from "./utils";
 import { inspect } from "node:util";
 
 export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
@@ -125,9 +125,15 @@ const getAssetWallet = (bigWallet: BigWallet, assetName: string): AssetWallet =>
 };
 
 const getSafeMarketFiatPrice = (transaction: Transaction): number => {
-    // Recovering precise fiat market value as fiat data does not go below cents
-    console.log(`getSafeMarketFiatPrice: ${transaction.amountFiat} / ${transaction.amountAsset}`);
-    return transaction.amountFiat / transaction.amountAsset!;
+    const marketFiatPrice = transaction.marketFiatPrice;
+    if(!marketFiatPrice){
+        // Recovering precise fiat market value if zero as fiat data does not go below cents
+        if (!transaction.amountAsset) {
+            throw new Error('This transaction has no asset amount ! Cannot getSafeMarketFiatPrice');
+        }
+        return octs(transaction.amountFiat / transaction.amountAsset);
+    }
+    return marketFiatPrice;
 };
 
 const getWalletFiatValue = (assetWallet: AssetWallet, currentFiatPrice: number): number => assetWallet.stack
@@ -183,4 +189,8 @@ const computeGlobalGain = (assets: Map<string, AssetWallet>): number => {
         total += wallet.fiatGains.reduce((previous, current) => previous + current, 0);
     });
     return total;
+};
+
+export const Testing = {
+    getSafeMarketFiatPrice
 };
