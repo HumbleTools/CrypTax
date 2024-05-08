@@ -1,5 +1,5 @@
 import { describe, test, expect } from '@jest/globals';
-import { Testing } from '../src/work';
+import { Testing, calculateRemainingStack } from '../src/work';
 import { AssetWallet, StackedAmount, Transaction } from '../src/model';
 
 describe('Testing work functions', () => {
@@ -61,4 +61,44 @@ describe('Testing work functions', () => {
         expect(Testing.calculateGain(sellingPrice, assetWalletFiatValue, totalAcquisitionPrice)).toBe(expected);
     });
 
+});
+
+describe('Testing calculateRemainingStack', () => {
+    const input: StackedAmount[] = [
+        {quantity: 3, assetFiatPrice: 0.21},
+        {quantity: 1, assetFiatPrice: 0.22},
+        {quantity: 2, assetFiatPrice: 0.23}
+    ];
+
+    test('calculateRemainingStack empties the stack', () => {
+        const result = calculateRemainingStack(input, 6);
+        expect(result).toStrictEqual({
+            remainingStack: [],
+            removedAmount: 6,
+            amountAquisitionPrice: 1.31
+        });
+    });
+
+    test('calculateRemainingStack cuts the stack evenly', () => {
+        const result = calculateRemainingStack(input, 4);
+        expect(result).toStrictEqual({
+            remainingStack: [
+                {quantity: 2, assetFiatPrice: 0.23}
+            ],
+            removedAmount: 4,
+            amountAquisitionPrice: 0.85
+        });
+    });
+
+    test('calculateRemainingStack cuts the stack in the middle of an amount', () => {
+        const result = calculateRemainingStack(input, 3.2);
+        expect(result).toStrictEqual({
+            remainingStack: [
+                {quantity: 0.8, assetFiatPrice: 0.22},
+                {quantity: 2, assetFiatPrice: 0.23}
+            ],
+            removedAmount: 3.2,
+            amountAquisitionPrice: 0.67
+        });
+    });
 });

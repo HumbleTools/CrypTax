@@ -1,6 +1,6 @@
 import { CsvError } from "csv-parse/.";
 import { AssetWallet, BigWallet, digestBitpandaCsvTransaction, FiatWallet, initBigWallet, StackedAmount, Transaction } from "./model";
-import { cents, getNumberOrZero, octs, readFixesFile } from "./utils";
+import { cents, octs, readFixesFile } from "./utils";
 import { inspect } from "node:util";
 
 export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
@@ -33,9 +33,9 @@ export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
 };
 
 const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWallet => {
-    // TODO add unit tests to secure the code
     // TODO calculate gains, investment and withdrawals for each year, and all-time
     // TODO output in the end an array to display results calculated for each year
+    // TODO ajouter une génération de document expliquant chaque calcul
 
     console.log(transaction);
     const fiatWallet = bigWallet.fiatWallet;
@@ -80,8 +80,11 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
             // Recovering total acquisition price
             const totalAcquisitionPrice = getTotalAcquisitionPrice(assetWallet);
             console.log(`totalAcquisitionPrice: ${totalAcquisitionPrice}`);
+            const bittenFromStack = calculateRemainingStack(assetWallet.stack, transaction.amountAsset!);
             // Calculating gain with Article 150 VH bis § III from french tax code
             const gain = calculateGain(sellingPrice, assetWalletFiatValue, totalAcquisitionPrice);
+            // Calculating gain with my own method
+            // const gain = sellingPrice - bittenFromStack.amountAquisitionPrice;
             console.log(`gain: ${gain}`);
 
             bigWallet.assetWallets.set(assetWallet.assetName, {
@@ -91,7 +94,7 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
                     gain
                 ],
                 // Biting into assetWallet.stack to remove transaction.amountAsset
-                stack: calculateRemainingStack(assetWallet.stack, transaction.amountAsset!)
+                stack: bittenFromStack.remainingStack
             });
             return {
                 ...bigWallet,
@@ -156,10 +159,10 @@ const getWalletFiatValue = (assetWallet: AssetWallet, currentFiatPrice: number):
 
 const getTotalAcquisitionPrice = (assetWallet: AssetWallet): number => assetWallet.stack
     .reduce((previousTotal: number, currentStackedAmount: StackedAmount) => {
-        if(0===currentStackedAmount.assetFiatPrice) {
+        if (0 === currentStackedAmount.assetFiatPrice) {
             throw new Error("assetFiatPrice should not be zero here...");
         }
-        if(0===currentStackedAmount.quantity) {
+        if (0 === currentStackedAmount.quantity) {
             throw new Error("quantity should not be zero here...");
         }
         return cents(previousTotal + currentStackedAmount.quantity * currentStackedAmount.assetFiatPrice);
@@ -170,10 +173,17 @@ const calculateGain = (sellingPrice: number, assetWalletFiatValue: number, total
     return cents(sellingPrice - totalAcquisitionPrice * sellingPrice / assetWalletFiatValue);
 }
 
-const calculateRemainingStack = (stack: StackedAmount[], amountAsset: number) => {
+interface RemainingStackWithRemovedAmount {
+    remainingStack: StackedAmount[];
+    removedAmount: number;
+    amountAquisitionPrice: number;
+}
+
+export const calculateRemainingStack = (stack: StackedAmount[], amountToRemove: number): RemainingStackWithRemovedAmount => {
     // Use Shift to retrieve first in line, because assets are added at the end of the stack and oldest assets are sold first (PEPS/FIFO)
     let newStack = [...stack];
-    let amountToRemove = amountAsset;
+    let removedStack: StackedAmount[] = [];
+    let amountLeftToRemove = amountToRemove;
     let infiniteLoopGuardian = 0;
     do {
         infiniteLoopGuardian++;
@@ -182,24 +192,29 @@ const calculateRemainingStack = (stack: StackedAmount[], amountAsset: number) =>
         }
         const popped = newStack.shift();
         if (!popped) {
-            if (0 === octs(amountToRemove)) {
-                console.log(`Rounding amountToRemove=${amountToRemove} to zero to finish stack biting`);
-                break;
-            }
-            throw new Error(`Not enough funds !? amountToRemove=${amountToRemove} still`);
+            throw new Error(`Not enough funds !? amountToRemove=${amountLeftToRemove} still`);
         }
-        const leftOver = popped.quantity - amountToRemove;
+        const leftOver = octs(popped.quantity - amountLeftToRemove);
         if (leftOver > 0) {
             newStack.unshift({
                 assetFiatPrice: popped.assetFiatPrice,
                 quantity: leftOver
             });
-            amountToRemove = 0;
+            removedStack.push({
+                assetFiatPrice: popped.assetFiatPrice,
+                quantity: amountLeftToRemove
+            });
+            amountLeftToRemove = 0;
         } else {
-            amountToRemove = Math.abs(leftOver);
+            amountLeftToRemove = Math.abs(leftOver);
+            removedStack.push(popped);
         }
-    } while (amountToRemove > 0);
-    return newStack;
+    } while (amountLeftToRemove > 0);
+    return {
+        remainingStack: newStack,
+        removedAmount: amountToRemove,
+        amountAquisitionPrice: getTotalAcquisitionPrice({ stack: removedStack } as AssetWallet)
+    };
 };
 
 const computeGlobalGain = (assets: Map<string, AssetWallet>): number => {
