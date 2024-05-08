@@ -137,10 +137,8 @@ const getSafeMarketFiatPrice = (transaction: Transaction): number => {
 };
 
 const getWalletFiatValue = (assetWallet: AssetWallet, currentFiatPrice: number): number => assetWallet.stack
-    .reduce((previousTotal: number, currentStackedAmount: StackedAmount) => {
-        console.log(`getWalletFiatValue ${previousTotal} + ${currentStackedAmount.quantity} * ${currentFiatPrice}`);
-        return cents(previousTotal + currentStackedAmount.quantity * currentFiatPrice);
-    }, 0);
+    .reduce((previousTotal: number, currentStackedAmount: StackedAmount) =>
+        cents(previousTotal + currentStackedAmount.quantity * currentFiatPrice), 0);
 
 const getTotalAcquisitionPrice = (assetWallet: AssetWallet): number => assetWallet.stack
     .reduce((previousTotal: number, currentStackedAmount: StackedAmount) =>
@@ -192,5 +190,6 @@ const computeGlobalGain = (assets: Map<string, AssetWallet>): number => {
 };
 
 export const Testing = {
-    getSafeMarketFiatPrice
+    getSafeMarketFiatPrice,
+    getWalletFiatValue
 };
