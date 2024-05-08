@@ -51,4 +51,14 @@ describe('Testing work functions', () => {
         expect(Testing.getTotalAcquisitionPrice(wallet)).toBe(11.17);
     });
 
+    test.each`
+        sellingPrice | assetWalletFiatValue | totalAcquisitionPrice | expected
+        ${100}       | ${200}               | ${200}                | ${0}
+        ${100}       | ${200}               | ${100}                | ${50}
+        ${100}       | ${200}               | ${400}                | ${-100}
+        ${50.23}     | ${60.45}             | ${75.51}              | ${-12.51}
+    `('calculateGain($sellingPrice, $assetWalletFiatValue, $totalAcquisitionPrice) should return $expected', ({ sellingPrice, assetWalletFiatValue, totalAcquisitionPrice, expected }) => {
+        expect(Testing.calculateGain(sellingPrice, assetWalletFiatValue, totalAcquisitionPrice)).toBe(expected);
+    });
+
 });

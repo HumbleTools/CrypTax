@@ -153,7 +153,7 @@ const getTotalAcquisitionPrice = (assetWallet: AssetWallet): number => assetWall
 
 const calculateGain = (sellingPrice: number, assetWalletFiatValue: number, totalAcquisitionPrice: number) => {
     // FORMULE : gain = prix de cession - [prix total d'acquisition * (prix de cession / valeur globale du portefeuille)]
-    return cents(sellingPrice - (totalAcquisitionPrice * sellingPrice) / assetWalletFiatValue);
+    return cents(sellingPrice - totalAcquisitionPrice * sellingPrice / assetWalletFiatValue);
 }
 
 const calculateRemainingStack = (stack: StackedAmount[], amountAsset: number) => {
@@ -199,5 +199,6 @@ const computeGlobalGain = (assets: Map<string, AssetWallet>): number => {
 export const Testing = {
     getSafeMarketFiatPrice,
     getWalletFiatValue,
-    getTotalAcquisitionPrice
+    getTotalAcquisitionPrice,
+    calculateGain
 };
