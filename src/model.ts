@@ -1,9 +1,19 @@
 import { getNumberOrNull, getNumberOrZero } from "./utils";
 
+type TransactionType = 'DEPOSIT' | 'BUY' | 'SELL' | 'TRANSFER' | 'WITHDRAWAL';
+type TransactionDirection = 'IN' | 'OUT';
+
+export interface Fix {
+    type: TransactionType | null;
+    amountFiat: number | null;
+    marketFiatPrice: number | null;
+}
+
 export interface Transaction {
+    id: string;
     date: Date;
-    type: 'DEPOSIT' | 'BUY' | 'SELL' | 'TRANSFER' | 'WITHDRAWAL';
-    direction: 'IN' | 'OUT';
+    type: TransactionType;
+    direction: TransactionDirection;
     assetName: string;
     amountAsset: number | null;
     amountFiat: number;
@@ -44,11 +54,12 @@ export const initBigWallet = (fiatName: string): BigWallet => ({
 });
 
 export const digestBitpandaCsvTransaction = (obj: any): Transaction => ({
+    id: obj['Transaction ID'],
     date: new Date(obj['Timestamp']),
     type: obj['Transaction Type'].toUpperCase(),
     direction: 'incoming' === obj['In/Out'] ? 'IN' : "OUT",
     assetName: obj['Asset'],
     amountAsset: getNumberOrNull(obj['Amount Asset']),
     amountFiat: getNumberOrZero(obj['Amount Fiat']),
-    marketFiatPrice: getNumberOrNull(obj['Asset market price'])
+    marketFiatPrice: getNumberOrNull(obj['Asset market price']),
 });

@@ -1,10 +1,20 @@
 import * as fs from 'fs';
+import { Fix } from './model';
 
-export const readLinesFromFile: (filePath: string) => string = (filePath) =>
+export const readLinesFromCsvFile: (filePath: string) => string = (filePath) =>
     fs.readFileSync(filePath, 'utf8')
         .split('\n')
         .slice(5)
         .join('\n');
+
+export const readFixesFile = (filePath: string): Map<string, Fix> => {
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const resultMap = new Map<string, Fix>();
+    for (const id of Object.keys(raw)) {
+        resultMap.set(id, raw[id]);
+    }
+    return resultMap;
+};
 
 export const getNumberOrZero = (value: string): number => getNumberOrDefault(value, 0) as number;
 export const getNumberOrNull = (value: string): number | null => getNumberOrDefault(value, null);
@@ -17,7 +27,7 @@ const round = (n: number, k: number, resolution: number): number => {
     const result = Math.round(
         Math.round(((n + Number.EPSILON) * precision) / k) * k
     ) / precision;
-    if(Number.isNaN(result)){
+    if (Number.isNaN(result)) {
         throw new Error("NaN encountered ! Incorrect computing...");
     }
     return result;

@@ -1,6 +1,6 @@
 import { CsvError } from "csv-parse/.";
 import { AssetWallet, BigWallet, digestBitpandaCsvTransaction, FiatWallet, initBigWallet, StackedAmount, Transaction } from "./model";
-import { cents, getNumberOrZero, octs } from "./utils";
+import { cents, getNumberOrZero, octs, readFixesFile } from "./utils";
 import { inspect } from "node:util";
 
 export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
@@ -9,8 +9,22 @@ export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
         return;
     }
 
+    const fixes = readFixesFile('C:/data/fixes.json');
+
     const finalBigWallet = rawTransactions
         .map(digestBitpandaCsvTransaction)
+        .map(transaction => {
+            const fix = fixes.get(transaction.id);
+            if (fix) {
+                return {
+                    ...transaction,
+                    type: fix.type ?? transaction.type,
+                    amountFiat: fix.amountFiat ?? transaction.amountFiat,
+                    marketFiatPrice: fix.marketFiatPrice ?? transaction.marketFiatPrice
+                };
+            }
+            return transaction;
+        })
         .reduce(applyTransaction, initBigWallet('EUR'));
 
     console.log(inspect(finalBigWallet, { showHidden: false, depth: null, colors: true }))
@@ -126,7 +140,7 @@ const getAssetWallet = (bigWallet: BigWallet, assetName: string): AssetWallet =>
 
 const getSafeMarketFiatPrice = (transaction: Transaction): number => {
     const marketFiatPrice = transaction.marketFiatPrice;
-    if(!marketFiatPrice){
+    if (!marketFiatPrice) {
         // Recovering precise fiat market value if zero as fiat data does not go below cents
         if (!transaction.amountAsset) {
             throw new Error('This transaction has no asset amount ! Cannot getSafeMarketFiatPrice');
