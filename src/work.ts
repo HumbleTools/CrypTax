@@ -1,6 +1,6 @@
 import { CsvError } from "csv-parse/.";
 import { AssetWallet, BigWallet, digestBitpandaCsvTransaction, FiatWallet, initBigWallet, StackedAmount, Transaction } from "./model";
-import { prodCents, sumCents, sumOcts } from "./utils";
+import { cents, octs, readFixesFile } from "./utils";
 import { inspect } from "node:util";
 
 export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
@@ -9,18 +9,33 @@ export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
         return;
     }
 
+    const fixes = readFixesFile('C:/data/fixes.json');
+
     const finalBigWallet = rawTransactions
         .map(digestBitpandaCsvTransaction)
+        .map(transaction => {
+            const fix = fixes.get(transaction.id);
+            if (fix) {
+                return {
+                    ...transaction,
+                    type: fix.type ?? transaction.type,
+                    amountFiat: fix.amountFiat ?? transaction.amountFiat,
+                    marketFiatPrice: fix.marketFiatPrice ?? transaction.marketFiatPrice
+                };
+            }
+            return transaction;
+        })
         .reduce(applyTransaction, initBigWallet('EUR'));
 
-    console.log(finalBigWallet);
     console.log(inspect(finalBigWallet, { showHidden: false, depth: null, colors: true }))
+    console.log(`Expected global gain = ${finalBigWallet.totalWithdrawn} - ${finalBigWallet.totalDeposited} = ${finalBigWallet.totalWithdrawn - finalBigWallet.totalDeposited}`);
+    console.log(`Actual gain = ${computeGlobalGain(finalBigWallet.assetWallets)}`);
 };
 
 const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWallet => {
-    // TODO add unit tests to secure the code
     // TODO calculate gains, investment and withdrawals for each year, and all-time
     // TODO output in the end an array to display results calculated for each year
+    // TODO ajouter une génération de document expliquant chaque calcul
 
     console.log(transaction);
     const fiatWallet = bigWallet.fiatWallet;
@@ -33,8 +48,9 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
                 ...bigWallet,
                 fiatWallet: {
                     ...fiatWallet,
-                    amount: sumCents(fiatWallet.amount, transaction.amountFiat)
-                }
+                    amount: cents(fiatWallet.amount + transaction.amountFiat)
+                },
+                totalDeposited: cents(bigWallet.totalDeposited + transaction.amountFiat)
             };
         case "BUY":
             bigWallet.assetWallets.set(assetWallet.assetName, {
@@ -43,7 +59,7 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
                     ...assetWallet.stack,
                     { // Adding new asset stack with fiatValue to assetWallet
                         quantity: transaction.amountAsset!,
-                        assetFiatPrice: transaction.marketFiatPrice!
+                        assetFiatPrice: getSafeMarketFiatPrice(transaction)
                     }
                 ]
             });
@@ -51,12 +67,12 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
                 ...bigWallet,
                 fiatWallet: {
                     ...fiatWallet, // Removing transaction.amountFiat from fiatWallet
-                    amount: sumCents(fiatWallet.amount, -1 * transaction.amountFiat)
+                    amount: cents(fiatWallet.amount - transaction.amountFiat)
                 }
             };
         case "SELL":
             // Recovering total wallet value at the time of transaction
-            const assetWalletFiatValue = getWalletFiatValue(assetWallet, transaction.marketFiatPrice!);
+            const assetWalletFiatValue = getWalletFiatValue(assetWallet, getSafeMarketFiatPrice(transaction));
             console.log(`assetWalletFiatValue: ${assetWalletFiatValue}`);
             // Recovering selling price
             const sellingPrice = transaction.amountFiat;
@@ -64,8 +80,11 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
             // Recovering total acquisition price
             const totalAcquisitionPrice = getTotalAcquisitionPrice(assetWallet);
             console.log(`totalAcquisitionPrice: ${totalAcquisitionPrice}`);
+            const bittenFromStack = calculateRemainingStack(assetWallet.stack, transaction.amountAsset!);
             // Calculating gain with Article 150 VH bis § III from french tax code
             const gain = calculateGain(sellingPrice, assetWalletFiatValue, totalAcquisitionPrice);
+            // Calculating gain with my own method
+            // const gain = sellingPrice - bittenFromStack.amountAquisitionPrice;
             console.log(`gain: ${gain}`);
 
             bigWallet.assetWallets.set(assetWallet.assetName, {
@@ -75,13 +94,13 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
                     gain
                 ],
                 // Biting into assetWallet.stack to remove transaction.amountAsset
-                stack: calculateRemainingStack(assetWallet.stack, transaction.amountAsset!)
+                stack: bittenFromStack.remainingStack
             });
             return {
                 ...bigWallet,
                 fiatWallet: {
                     ...fiatWallet, // Adding selling price to fiatWallet
-                    amount: sumCents(fiatWallet.amount, transaction.amountFiat)
+                    amount: cents(fiatWallet.amount + transaction.amountFiat)
                 }
             };
         case "TRANSFER":
@@ -92,7 +111,7 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
                         ...assetWallet.stack,
                         { // Adding transaction.amountAsset to assetWallet.stack without removing fiat
                             quantity: transaction.amountAsset!,
-                            assetFiatPrice: transaction.marketFiatPrice!
+                            assetFiatPrice: getSafeMarketFiatPrice(transaction)
                         }
                     ]
                 });
@@ -105,17 +124,13 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
             break;
         case "WITHDRAWAL":
             // Removing fiat amount from fiatWallet to withdrawal wallet
-            const withdrawalWallet = bigWallet.withdrawalWallet;
             return {
                 ...bigWallet,
                 fiatWallet: {
                     ...fiatWallet,
-                    amount: sumCents(fiatWallet.amount, -1 * transaction.amountFiat)
+                    amount: cents(fiatWallet.amount - transaction.amountFiat)
                 },
-                withdrawalWallet: {
-                    ...withdrawalWallet,
-                    amount: sumCents(withdrawalWallet.amount, transaction.amountFiat)
-                }
+                totalWithdrawn: cents(bigWallet.totalWithdrawn + transaction.amountFiat)
             };
     }
     throw Error(`The transaction ${transaction.type}/${transaction.direction} is not yet handled !`);
@@ -126,27 +141,49 @@ const getAssetWallet = (bigWallet: BigWallet, assetName: string): AssetWallet =>
     return assetWallet ?? ({ assetName, stack: [], fiatGains: [] });
 };
 
+const getSafeMarketFiatPrice = (transaction: Transaction): number => {
+    const marketFiatPrice = transaction.marketFiatPrice;
+    if (!marketFiatPrice) {
+        // Recovering precise fiat market value if zero as fiat data does not go below cents
+        if (!transaction.amountAsset) {
+            throw new Error('This transaction has no asset amount ! Cannot getSafeMarketFiatPrice');
+        }
+        return octs(transaction.amountFiat / transaction.amountAsset);
+    }
+    return marketFiatPrice;
+};
+
 const getWalletFiatValue = (assetWallet: AssetWallet, currentFiatPrice: number): number => assetWallet.stack
-    .reduce((previousTotal: number, currentStackedAmount: StackedAmount) => {
-        const currentValue = prodCents(currentStackedAmount.quantity, currentFiatPrice);
-        return sumCents(previousTotal, currentValue);
-    }, 0);
+    .reduce((previousTotal: number, currentStackedAmount: StackedAmount) =>
+        cents(previousTotal + currentStackedAmount.quantity * currentFiatPrice), 0);
 
 const getTotalAcquisitionPrice = (assetWallet: AssetWallet): number => assetWallet.stack
     .reduce((previousTotal: number, currentStackedAmount: StackedAmount) => {
-        const currentValue = prodCents(currentStackedAmount.quantity, currentStackedAmount.assetFiatPrice);
-        return sumCents(previousTotal, currentValue);
+        if (0 === currentStackedAmount.assetFiatPrice) {
+            throw new Error("assetFiatPrice should not be zero here...");
+        }
+        if (0 === currentStackedAmount.quantity) {
+            throw new Error("quantity should not be zero here...");
+        }
+        return cents(previousTotal + currentStackedAmount.quantity * currentStackedAmount.assetFiatPrice);
     }, 0);
 
 const calculateGain = (sellingPrice: number, assetWalletFiatValue: number, totalAcquisitionPrice: number) => {
     // FORMULE : gain = prix de cession - [prix total d'acquisition * (prix de cession / valeur globale du portefeuille)]
-    return sumCents(sellingPrice, -1 * totalAcquisitionPrice * sellingPrice / assetWalletFiatValue);
+    return cents(sellingPrice - totalAcquisitionPrice * sellingPrice / assetWalletFiatValue);
 }
 
-const calculateRemainingStack = (stack: StackedAmount[], amountAsset: number) => {
+interface RemainingStackWithRemovedAmount {
+    remainingStack: StackedAmount[];
+    removedAmount: number;
+    amountAquisitionPrice: number;
+}
+
+export const calculateRemainingStack = (stack: StackedAmount[], amountToRemove: number): RemainingStackWithRemovedAmount => {
     // Use Shift to retrieve first in line, because assets are added at the end of the stack and oldest assets are sold first (PEPS/FIFO)
     let newStack = [...stack];
-    let amountToRemove = amountAsset;
+    let removedStack: StackedAmount[] = [];
+    let amountLeftToRemove = amountToRemove;
     let infiniteLoopGuardian = 0;
     do {
         infiniteLoopGuardian++;
@@ -155,15 +192,42 @@ const calculateRemainingStack = (stack: StackedAmount[], amountAsset: number) =>
         }
         const popped = newStack.shift();
         if (!popped) {
-            throw new Error("Not enough funds !? Incorrect computing...");
+            throw new Error(`Not enough funds !? amountToRemove=${amountLeftToRemove} still`);
         }
-        amountToRemove = sumOcts(popped.quantity, -1 * Math.abs(amountToRemove));
-        if (amountToRemove > 0) {
+        const leftOver = octs(popped.quantity - amountLeftToRemove);
+        if (leftOver > 0) {
             newStack.unshift({
                 assetFiatPrice: popped.assetFiatPrice,
-                quantity: amountToRemove
+                quantity: leftOver
             });
+            removedStack.push({
+                assetFiatPrice: popped.assetFiatPrice,
+                quantity: amountLeftToRemove
+            });
+            amountLeftToRemove = 0;
+        } else {
+            amountLeftToRemove = Math.abs(leftOver);
+            removedStack.push(popped);
         }
-    } while (amountToRemove < 0);
-    return newStack;
+    } while (amountLeftToRemove > 0);
+    return {
+        remainingStack: newStack,
+        removedAmount: amountToRemove,
+        amountAquisitionPrice: getTotalAcquisitionPrice({ stack: removedStack } as AssetWallet)
+    };
+};
+
+const computeGlobalGain = (assets: Map<string, AssetWallet>): number => {
+    let total = 0;
+    assets.forEach(wallet => {
+        total += wallet.fiatGains.reduce((previous, current) => previous + current, 0);
+    });
+    return total;
+};
+
+export const Testing = {
+    getSafeMarketFiatPrice,
+    getWalletFiatValue,
+    getTotalAcquisitionPrice,
+    calculateGain
 };
