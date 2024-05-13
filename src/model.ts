@@ -28,7 +28,12 @@ export interface StackedAmount {
 export interface AssetWallet {
     assetName: string;
     stack: StackedAmount[];
-    fiatGains: number[];
+    fiatGains: FiatGain[];
+}
+
+export interface FiatGain {
+    gain: number;
+    fiscalYear: number;
 }
 
 export interface FiatWallet {
@@ -41,6 +46,16 @@ export interface BigWallet {
     totalDeposited: number;
     totalWithdrawn: number;
     assetWallets: Map<string, AssetWallet>;
+}
+
+export interface FinalGains {
+    allTime: GainLoss;
+    yearlyGains: Map<number, GainLoss>;
+}
+
+export interface GainLoss {
+    gain: number;
+    loss: number;
 }
 
 export const initBigWallet = (fiatName: string): BigWallet => ({

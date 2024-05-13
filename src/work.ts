@@ -1,7 +1,9 @@
 import { CsvError } from "csv-parse/.";
-import { AssetWallet, BigWallet, digestBitpandaCsvTransaction, FiatWallet, initBigWallet, StackedAmount, Transaction } from "./model";
+import { AssetWallet, BigWallet, digestBitpandaCsvTransaction, FiatWallet, FinalGains, GainLoss, initBigWallet, StackedAmount, Transaction } from "./model";
 import { cents, octs, readFixesFile } from "./utils";
 import { inspect } from "node:util";
+
+const inspectOptions = { showHidden: false, depth: null, colors: true };
 
 export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
     if (err) {
@@ -27,9 +29,11 @@ export const work = (err: CsvError | undefined, rawTransactions: any[]) => {
         })
         .reduce(applyTransaction, initBigWallet('EUR'));
 
-    console.log(inspect(finalBigWallet, { showHidden: false, depth: null, colors: true }))
-    console.log(`Expected global gain = ${finalBigWallet.totalWithdrawn} - ${finalBigWallet.totalDeposited} = ${finalBigWallet.totalWithdrawn - finalBigWallet.totalDeposited}`);
-    console.log(`Actual gain = ${computeGlobalGain(finalBigWallet.assetWallets)}`);
+    console.log(inspect(finalBigWallet, inspectOptions))
+    console.log(`Expected all-time gains = ${finalBigWallet.totalWithdrawn}(withdrawn) - ${finalBigWallet.totalDeposited}(deposited) = ${cents(finalBigWallet.totalWithdrawn - finalBigWallet.totalDeposited)}`);
+    const computedGains = computeGains(finalBigWallet.assetWallets);
+    console.log(`Calculated all-time gains: ${computedGains.allTime.gain}(gains) ${computedGains.allTime.loss}(losses) = ${cents(computedGains.allTime.gain + computedGains.allTime.loss)}`);
+    console.log(`Yearly gains : ${inspect(computedGains.yearlyGains, inspectOptions)}`);
 };
 
 const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWallet => {
@@ -91,7 +95,7 @@ const applyTransaction = (bigWallet: BigWallet, transaction: Transaction): BigWa
                 ...assetWallet,
                 fiatGains: [
                     ...assetWallet.fiatGains,
-                    gain
+                    { gain, fiscalYear: transaction.date.getFullYear() }
                 ],
                 // Biting into assetWallet.stack to remove transaction.amountAsset
                 stack: bittenFromStack.remainingStack
@@ -217,17 +221,45 @@ export const calculateRemainingStack = (stack: StackedAmount[], amountToRemove: 
     };
 };
 
-const computeGlobalGain = (assets: Map<string, AssetWallet>): number => {
-    let total = 0;
+const computeGains = (assets: Map<string, AssetWallet>): FinalGains => {
+    const allTime: GainLoss = {
+        gain: 0,
+        loss: 0
+    };
+    const yearlyGains = new Map<number, GainLoss>();
     assets.forEach(wallet => {
-        total += wallet.fiatGains.reduce((previous, current) => previous + current, 0);
+        wallet.fiatGains.forEach(fiatGain => {
+            const {gain, fiscalYear} = fiatGain;
+            if(gain > 0) {
+                allTime.gain = cents(allTime.gain + gain);
+            } else {
+                allTime.loss = cents(allTime.loss + gain);
+            }
+            let yearlyGain = yearlyGains.get(fiscalYear);
+            if(!yearlyGain) {
+                yearlyGain = {
+                    gain: 0,
+                    loss: 0
+                };
+            }
+            if(gain > 0) {
+                yearlyGain.gain = cents(yearlyGain.gain + gain);
+            } else {
+                yearlyGain.loss = cents(yearlyGain.loss + gain);
+            }
+            yearlyGains.set(fiscalYear, yearlyGain);
+        });
     });
-    return total;
+    return {
+        allTime,
+        yearlyGains
+    };
 };
 
 export const Testing = {
     getSafeMarketFiatPrice,
     getWalletFiatValue,
     getTotalAcquisitionPrice,
-    calculateGain
+    calculateGain,
+    computeGains
 };
