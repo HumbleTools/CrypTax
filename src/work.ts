@@ -260,5 +260,6 @@ export const Testing = {
     getSafeMarketFiatPrice,
     getWalletFiatValue,
     getTotalAcquisitionPrice,
-    calculateGain
+    calculateGain,
+    computeGains
 };

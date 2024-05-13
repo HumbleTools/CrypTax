@@ -65,9 +65,9 @@ describe('Testing work functions', () => {
 
 describe('Testing calculateRemainingStack', () => {
     const input: StackedAmount[] = [
-        {quantity: 3, assetFiatPrice: 0.21},
-        {quantity: 1, assetFiatPrice: 0.22},
-        {quantity: 2, assetFiatPrice: 0.23}
+        { quantity: 3, assetFiatPrice: 0.21 },
+        { quantity: 1, assetFiatPrice: 0.22 },
+        { quantity: 2, assetFiatPrice: 0.23 }
     ];
 
     test('calculateRemainingStack empties the stack', () => {
@@ -83,7 +83,7 @@ describe('Testing calculateRemainingStack', () => {
         const result = calculateRemainingStack(input, 4);
         expect(result).toStrictEqual({
             remainingStack: [
-                {quantity: 2, assetFiatPrice: 0.23}
+                { quantity: 2, assetFiatPrice: 0.23 }
             ],
             removedAmount: 4,
             amountAquisitionPrice: 0.85
@@ -94,11 +94,56 @@ describe('Testing calculateRemainingStack', () => {
         const result = calculateRemainingStack(input, 3.2);
         expect(result).toStrictEqual({
             remainingStack: [
-                {quantity: 0.8, assetFiatPrice: 0.22},
-                {quantity: 2, assetFiatPrice: 0.23}
+                { quantity: 0.8, assetFiatPrice: 0.22 },
+                { quantity: 2, assetFiatPrice: 0.23 }
             ],
             removedAmount: 3.2,
             amountAquisitionPrice: 0.67
+        });
+    });
+
+    describe('Testing computeGains', () => {
+        test('computeGains should return correcty formed gains', () => {
+            const result = Testing.computeGains(new Map([
+                ['PLOP', {
+                    assetName: 'PLOP',
+                    fiatGains: [
+                        { gain: -1, fiscalYear: 3025 },
+                        { gain: 2.36, fiscalYear: 3025 },
+                        { gain: -0.2, fiscalYear: 3026 },
+                    ],
+                    stack: []
+                }],
+                ['BOUNCE', {
+                    assetName: 'BOUNCE',
+                    fiatGains: [
+                        { gain: -0.1, fiscalYear: 3025 },
+                        { gain: 2, fiscalYear: 3026 },
+                        { gain: 3.52, fiscalYear: 3027 }
+                    ],
+                    stack: []
+                }]
+            ]));
+            expect(result).toStrictEqual({
+                allTime: {
+                    gain: 7.88,
+                    loss: -1.3
+                },
+                yearlyGains: new Map([
+                    [3025, {
+                        gain: 2.36,
+                        loss: -1.1
+                    }],
+                    [3026, {
+                        gain: 2,
+                        loss: -0.2
+                    }],
+                    [3027, {
+                        gain: 3.52,
+                        loss: 0
+                    }]
+                ])
+            });
         });
     });
 });
